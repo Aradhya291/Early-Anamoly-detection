@@ -2,28 +2,65 @@
 
 #define DHTPIN D3
 #define DHTTYPE DHT11
-#define GAS_PIN A0
+#define ACS_PIN A0
+#define BUZZER D5
 
 DHT dht(DHTPIN, DHTTYPE);
 
-void setup() {
+// 🔥 Thresholds (only for labeling, NOT buzzer)
+float tempThreshold = 35.0;
+float lowRiskMin = 1.0;
+float highRiskMin = 2.0;
 
+void setup() {
   Serial.begin(9600);
   dht.begin();
-
+  pinMode(BUZZER, OUTPUT);
+  digitalWrite(BUZZER, LOW);
 }
 
 void loop() {
 
-  float temperature = dht.readTemperature();
+  // 🌡️ Read temperature
+  float temp = dht.readTemperature();
+  if (isnan(temp)) temp = 25.0;
 
-  int gas_value = analogRead(GAS_PIN);
+  // 🔌 Read current
+  int adcValue = analogRead(ACS_PIN);
+  float voltage = adcValue * (1.0 / 1023.0);
+  float current = voltage * 5.0;
 
-  Serial.print(temperature);
+  // 📊 STATUS (for dataset only)
+  String status;
+
+  if (current > highRiskMin) {
+    status = "HIGH";
+  }
+  else if (current >= lowRiskMin) {
+    status = "LOW";
+  }
+  else {
+    status = "NORMAL";
+  }
+
+  // 🔥 🔴 ML-BASED BUZZER CONTROL (FROM PYTHON)
+  if (Serial.available()) {
+    char signal = Serial.read();
+
+    if (signal == '1') {
+      digitalWrite(BUZZER, HIGH);  // ML says anomaly
+    } 
+    else if (signal == '0') {
+      digitalWrite(BUZZER, LOW);   // ML says normal
+    }
+  }
+
+  // 📊 SEND DATA TO PYTHON
+  Serial.print(temp);
   Serial.print(",");
-  Serial.println(gas_value);
+  Serial.print(current);
+  Serial.print(",");
+  Serial.println(status);
 
-  delay(5000);
-
+  delay(2000);
 }
-
